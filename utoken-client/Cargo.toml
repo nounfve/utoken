@@ -1,0 +1,10 @@
+[package]
+name = "utoken-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+utoken = { path = "../" }
+tokio = { version = "1", features = ["full"] }
+reqwest = "0.12.25"
+anyhow = "1.0.100"
