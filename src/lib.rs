@@ -1,8 +1,8 @@
+pub mod database;
 pub mod token;
 
 use axum::{
     Router,
-    body::Body,
     extract::Path,
     http::StatusCode,
     routing::{get, put},
@@ -11,10 +11,15 @@ use chrono::Utc;
 use sutils::tracing_setup;
 use tracing::{error, info};
 
-use crate::token::{Authorization, Claim};
+use crate::{
+    database::DataBase,
+    token::{Authorization, Claim},
+};
 
 pub async fn _main() {
     tracing_setup();
+
+    DataBase::init().await.expect("database conn failed");
 
     let app = Router::new()
         .route("/token/create", put(token_create))
@@ -37,6 +42,14 @@ async fn token_create(body: String) -> (StatusCode, String) {
 
     let auth = Authorization::new(claim);
     info!("auth: {auth:?}");
+
+    match auth.sql_insert_token().await {
+        Ok(_) => (),
+        Err(err) => {
+            error!("{err}");
+            return (StatusCode::BAD_REQUEST, format!("database raise error"));
+        }
+    }
 
     (
         StatusCode::CREATED, //

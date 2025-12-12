@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use reqwest::{Error, Method, Request, Url};
+use reqwest::Url;
 
 pub struct Client {
     inner: reqwest::Client,
@@ -33,7 +33,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_token() {
         Client::default()
-            .create_token(format!("u://get@u/some-claim"))
+            .create_token(format!("u://+get-put@./some-claim"))
             .await
             .unwrap();
     }
