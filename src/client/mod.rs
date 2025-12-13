@@ -31,7 +31,20 @@ impl Client {
             .send()
             .await?
             .error_for_status()?;
-        println!("{resp:?}");
+        let json = resp.json::<AuthToken>().await?;
+        Ok(json)
+    }
+
+    pub async fn refresh_token(&self,token:AuthToken)->anyhow::Result<AuthToken>{
+        let url = format!("{}/token/refresh", &self.endpoint);
+        let url = Url::from_str(&url)?;
+        let resp = self
+            .inner
+            .put(url)
+            .body(token.refresh.content)
+            .send()
+            .await?
+            .error_for_status()?;
         let json = resp.json::<AuthToken>().await?;
         Ok(json)
     }

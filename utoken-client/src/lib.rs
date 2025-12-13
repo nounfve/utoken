@@ -12,7 +12,7 @@ mod tests {
     async fn test_create_token() {
         let client = Client::default();
         let token = client
-            .create_token(format!("u://+get-put@./some-claim"))
+            .create_token(format!("u://+delete-post@./some-claim"))
             .await
             .unwrap();
 
@@ -20,5 +20,8 @@ mod tests {
         let url = Url::from_str(&url).unwrap();
         let req = reqwest::Request::new(reqwest::Method::GET, url);
         client.auth_request(req, &token).await.unwrap();
+
+        #[allow(unused)]
+        let token = client.refresh_token(token).await.unwrap();
     }
 }
