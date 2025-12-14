@@ -128,13 +128,14 @@ impl AuthToken {
         let db = DataBase::One();
         let _result = sqlx::query(
             "INSERT INTO utokens 
-            (access,access_expire,refresh,refresh_expire,claim) VALUES 
-            ($1, $2, $3, $4, $5)",
+            (access,access_expire,refresh,refresh_expire,scope,claim) VALUES 
+            ($1, $2, $3, $4, $5, $6)",
         )
         .bind(&self.access.content)
         .bind(&self.access.expire)
         .bind(&self.refresh.content)
         .bind(&self.refresh.expire)
+        .bind(&self.claim.parse_scope_name())
         .bind(&self.claim.inner.to_string())
         .execute(&db.conn)
         .await?;
