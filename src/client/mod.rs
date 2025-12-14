@@ -4,7 +4,7 @@ use axum::http::HeaderValue;
 use reqwest::{Request, Url, header::AUTHORIZATION};
 use tracing::info;
 
-use crate::token::AuthToken;
+use crate::{conversion::headers_to_cookie_jar, token::AuthToken};
 
 pub struct Client {
     inner: reqwest::Client,
@@ -31,11 +31,11 @@ impl Client {
             .send()
             .await?
             .error_for_status()?;
-        let json = resp.json::<AuthToken>().await?;
-        Ok(json)
+        let auth_jar = headers_to_cookie_jar(resp.headers());
+        Ok(auth_jar.try_into()?)
     }
 
-    pub async fn refresh_token(&self,token:AuthToken)->anyhow::Result<AuthToken>{
+    pub async fn refresh_token(&self, token: AuthToken) -> anyhow::Result<AuthToken> {
         let url = format!("{}/token/refresh", &self.endpoint);
         let url = Url::from_str(&url)?;
         let resp = self
@@ -45,8 +45,8 @@ impl Client {
             .send()
             .await?
             .error_for_status()?;
-        let json = resp.json::<AuthToken>().await?;
-        Ok(json)
+        let auth_jar = headers_to_cookie_jar(resp.headers());
+        Ok(auth_jar.try_into()?)
     }
 
     pub async fn auth_request(&self, mut req: Request, token: &AuthToken) -> anyhow::Result<()> {

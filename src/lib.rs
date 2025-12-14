@@ -1,7 +1,10 @@
+mod database;
+
 pub mod client;
-pub mod database;
 pub mod token;
 pub mod token_misc;
+mod conversion;
+
 
 use std::net::SocketAddr;
 
@@ -80,7 +83,7 @@ async fn handle_auth_path(
     (StatusCode::OK, String::new())
 }
 
-async fn health() -> String {
+pub async fn health() -> String {
     let time = Utc::now().to_string();
     format!("Ok @[{time}]")
 }

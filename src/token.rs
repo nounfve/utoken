@@ -10,20 +10,20 @@ use uuid::Uuid;
 
 use crate::database::DataBase;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuthToken {
     pub claim: Claim,
     pub access: Token,
     pub refresh: Token,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Token {
     pub content: String,
     pub expire: DateTime<Utc>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct Claim {
     #[serde(with = "http_serde::uri")]
@@ -42,8 +42,10 @@ impl AuthToken {
         }
     }
 
-    const ACCESS_EXPIRE: i64 = 4 * 60 * 60 * 1000; // 4hr
-    const REFRESH_EXPIRE: i64 = Self::ACCESS_EXPIRE * 180; // 30 days
+    pub const ACCESS_EXPIRE: i64 = 4 * 60 * 60 * 1000; // 4hr
+    pub const REFRESH_EXPIRE: i64 = Self::ACCESS_EXPIRE * 180; // 30 days
+    pub const UTOKEN_ACCESS: &str = "uA";
+    pub const UTOKEN_REFRESH: &str = "uR";
 }
 
 impl Token {

@@ -3,13 +3,15 @@ use std::{
     time::Duration,
 };
 
-use axum::{Router, extract::ConnectInfo, routing::put};
-use cell_reg::cell_reg_named::StaticRefSingleton as _;
+use axum::{Router, extract::ConnectInfo, response::Response, routing::put};
+use axum_extra::extract::CookieJar;
+use cell_reg::{cell_reg_named::StaticRefSingleton as _, scope_fn::ScopeInto};
 use reqwest::StatusCode;
 use tokio::time::sleep;
 use tracing::{error, info};
 
 use crate::{
+    RIP,
     database::DataBase,
     token::{AuthToken, Claim},
 };
@@ -23,12 +25,9 @@ pub fn token_route() -> Router {
         .route("/refresh", put(token_refresh))
 }
 
-pub async fn token_create(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    claim: String,
-) -> (StatusCode, String) {
+pub async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: String) -> Response {
     if addr.ip() != LOCALHOST {
-        return (StatusCode::UNAUTHORIZED, format!("not allowed"));
+        RIP!(StatusCode::UNAUTHORIZED, format!("not allowed"));
     }
 
     info!("token_claim: {claim}");
@@ -36,7 +35,7 @@ pub async fn token_create(
         Ok(claim) => claim,
         Err(err) => {
             error!("{err}");
-            return (StatusCode::BAD_REQUEST, format!("payload not a valid uri"));
+            RIP!(StatusCode::BAD_REQUEST, format!("payload not a valid uri"));
         }
     };
 
@@ -47,28 +46,22 @@ pub async fn token_create(
         Ok(_) => (),
         Err(err) => {
             error!("{err}");
-            return (StatusCode::BAD_REQUEST, format!("database raise error"));
+            RIP!(StatusCode::BAD_REQUEST, format!("database raise error"));
         }
     }
 
-    let auth = match serde_json::to_string(&auth) {
-        Ok(s) => s,
-        Err(err) => {
-            error!("{err}");
-            return (StatusCode::BAD_REQUEST, format!("serde json failed"));
-        }
-    };
+    let auth_jar = (&auth).InTo::<CookieJar>();
 
-    (StatusCode::CREATED, auth)
+    RIP!(StatusCode::CREATED, auth_jar)
 }
 
-pub async fn token_refresh(token: String) -> (StatusCode, String) {
+pub async fn token_refresh(token: String) -> Response {
     info!("refresh token: {token}");
     let auth = match AuthToken::sql_find_refresh_token(&token).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
-            return (StatusCode::BAD_REQUEST, format!("token not exists"));
+            RIP!(StatusCode::BAD_REQUEST, format!("token not exists"));
         }
     };
 
@@ -76,9 +69,9 @@ pub async fn token_refresh(token: String) -> (StatusCode, String) {
         Ok(()) => (),
         Err(err) => {
             error!("{err}");
-            return (
+            RIP!(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("token deletion failed"),
+                format!("token deletion failed")
             );
         }
     }

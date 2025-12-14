@@ -14,7 +14,7 @@ impl Default for DataBase {
 impl DataBase {
     pub async fn init() -> anyhow::Result<()> {
         let conn = PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(2)
             .connect("postgres://low-mem:some-secret@localhost/utoken")
             .await?;
 
