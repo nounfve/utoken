@@ -71,6 +71,12 @@ impl Claim {
             inner: Uri::from_static("~"),
         }
     }
+
+    pub fn scope_only(&self) -> Self {
+        Self {
+            inner: Uri::from_str(&self.parse_scope_name().unwrap_or(format!("."))).unwrap(),
+        }
+    }
 }
 
 impl Claim {
