@@ -3,7 +3,7 @@ mod database;
 pub mod client;
 pub mod token;
 pub mod token_misc;
-mod conversion;
+pub mod conversion;
 
 
 use std::net::SocketAddr;

@@ -4,8 +4,7 @@ use std::{
 };
 
 use axum::{Router, extract::ConnectInfo, response::Response, routing::put};
-use axum_extra::extract::CookieJar;
-use cell_reg::{cell_reg_named::StaticRefSingleton as _, scope_fn::ScopeInto};
+use cell_reg::cell_reg_named::StaticRefSingleton as _;
 use reqwest::StatusCode;
 use tokio::time::sleep;
 use tracing::{error, info};
@@ -39,7 +38,7 @@ pub async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: Str
         }
     };
 
-    let auth = AuthToken::new(claim);
+    let mut auth = AuthToken::new(claim);
     info!("auth: {auth:?}");
 
     match auth.sql_insert_token().await {
@@ -50,9 +49,10 @@ pub async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: Str
         }
     }
 
-    let auth_jar = (&auth).InTo::<CookieJar>();
+    auth.claim = Claim::reducted();
+    let auth_json = serde_json::to_string(&auth).unwrap();
 
-    RIP!(StatusCode::CREATED, auth_jar)
+    RIP!(StatusCode::CREATED, auth_json)
 }
 
 pub async fn token_refresh(token: String) -> Response {

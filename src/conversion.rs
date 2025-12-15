@@ -58,7 +58,7 @@ impl TryFrom<CookieJar> for AuthToken {
             .unwrap_or(&empty)
             .try_into()?;
         Ok(Self {
-            claim: Claim::from_str("*").unwrap(),
+            claim: Claim::from_str(".").unwrap(),
             access,
             refresh,
         })
@@ -87,6 +87,16 @@ macro_rules! RIP {
         {
             use axum::response::IntoResponse;
             return ( $( ($expr) ),* ).into_response();
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! Ok_Or {
+    ($matchee:expr,$err:ident,$else:expr) => {
+        match $matchee {
+            Ok(inner) => inner,
+            Err($err) => $else,
         }
     };
 }

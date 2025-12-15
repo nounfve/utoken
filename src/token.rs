@@ -66,6 +66,14 @@ impl Claim {
         Ok(this)
     }
 
+    pub fn reducted() -> Self {
+        Self {
+            inner: Uri::from_static("~"),
+        }
+    }
+}
+
+impl Claim {
     pub fn match_path(&self, path: &str) -> bool {
         let pattern = match Pattern::new(self.inner.path()) {
             Ok(p) => p,
