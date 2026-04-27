@@ -81,22 +81,3 @@ fn cookies_from_request(headers: &HeaderMap) -> impl Iterator<Item = Cookie<'sta
         .map(|c| Cookie::parse_encoded(c.to_string()).unwrap())
 }
 
-#[macro_export]
-macro_rules! RIP {
-    ($($expr:expr),*) => {
-        {
-            use axum::response::IntoResponse;
-            return ( $( ($expr) ),* ).into_response();
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! Ok_Or {
-    ($matchee:expr,$err:ident,$else:expr) => {
-        match $matchee {
-            Ok(inner) => inner,
-            Err($err) => $else,
-        }
-    };
-}

@@ -18,7 +18,7 @@ use axum_extra::{
     headers::{Authorization, authorization::Bearer},
 };
 use chrono::Utc;
-use sutils::tracing_setup;
+use sutils::{health, tracing_setup};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -81,9 +81,4 @@ async fn handle_auth_path(
     }
 
     (StatusCode::OK, String::new())
-}
-
-pub async fn health() -> String {
-    let time = Utc::now().to_string();
-    format!("Ok @[{time}]")
 }

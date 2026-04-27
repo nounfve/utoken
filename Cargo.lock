@@ -1995,7 +1995,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 name = "sutils"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "cell_reg",
+ "chrono",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2999,3 +3001,7 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "sutils"
+version = "0.1.0"

@@ -135,7 +135,8 @@ impl Claim {
     pub fn parse_scope_name(&self) -> Option<String> {
         self.inner
             .host()
-            .map(|s| s.trim_end_matches(".").to_owned())
+            .map(|s| s.trim_end_matches("."))
+            .map(|s| if s.is_empty() { "." } else { s }.into())
     }
 }
 

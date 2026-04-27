@@ -15,7 +15,7 @@ impl DataBase {
     pub async fn init() -> anyhow::Result<()> {
         let conn = PgPoolOptions::new()
             .max_connections(2)
-            .connect("postgres://low-mem:some-secret@localhost/utoken")
+            .connect("postgres://utoken:some-secret@localhost/utoken")
             .await?;
 
         sqlx::migrate!("./migrations").run(&conn).await?;

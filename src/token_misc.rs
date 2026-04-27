@@ -17,11 +17,11 @@ use cell_reg::cell_reg_named::StaticRefSingleton as _;
 use chrono::Utc;
 use http_body_util::BodyExt;
 use reqwest::StatusCode;
+use sutils::RIP;
 use tokio::time::sleep;
 use tracing::{error, info};
 
 use crate::{
-    RIP,
     database::DataBase,
     token::{AuthToken, Claim},
 };
@@ -109,15 +109,17 @@ pub async fn token_info(
     };
 
     let access_remain_sec = (auth.access.expire - Utc::now()).as_seconds_f64() as i64;
-    if let Some(refresh) = refresh {
-        if access_remain_sec < AuthToken::ACCESS_EXPIRE / 1000 / 8 {
-            let resp = token_refresh(refresh).await;
-            if !resp.status().is_success() {
-                return resp;
-            }
-            let body = resp.into_body().collect().await.unwrap().to_bytes();
-            auth = serde_json::from_slice(&body).unwrap();
+    if let Some(refresh) = refresh
+        && access_remain_sec < AuthToken::ACCESS_EXPIRE / 1000 / 8
+    {
+        let resp = token_refresh(refresh).await;
+        if !resp.status().is_success() {
+            return resp;
         }
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        auth = serde_json::from_slice(&body).unwrap();
+    } else {
+        auth.claim = auth.claim.scope_only()
     }
 
     let access_remain_sec = (auth.access.expire - Utc::now()).as_seconds_f64() as i64;
