@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cell_reg = { path = "../cell_reg/" }
-sutils = { path = "../cell_reg/sutils/" }
+sutils = { git = "https://github.com/nounfve-deploy/sutils.git", tag = "0.1.7" }
 
 axum = "0.8.7"
 tokio = { version = "1", features = ["full"] }

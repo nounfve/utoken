@@ -1,10 +1,10 @@
 use std::{collections::HashSet, str::FromStr};
 
 use axum::http::Uri;
-use cell_reg::cell_reg_named::StaticRefSingleton as _;
 use chrono::{DateTime, Duration, Utc};
 use glob::Pattern;
 use sqlx::{FromRow, Row, postgres::PgRow};
+use sutils::Singleton;
 use tracing::error;
 use uuid::Uuid;
 

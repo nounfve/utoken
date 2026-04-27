@@ -1,14 +1,9 @@
-use cell_reg::cell_reg::StaticRef;
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sutils::Singleton;
 
+#[Singleton(zeroed)]
 pub struct DataBase {
     pub conn: Pool<Postgres>,
-}
-
-impl Default for DataBase {
-    fn default() -> Self {
-        panic!("shold call init instead default");
-    }
 }
 
 impl DataBase {
@@ -20,7 +15,7 @@ impl DataBase {
 
         sqlx::migrate!("./migrations").run(&conn).await?;
 
-        StaticRef::new(Self { conn }).setSingleton();
+        Self::Set(Self { conn });
         Ok(())
     }
 }

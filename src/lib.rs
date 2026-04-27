@@ -1,16 +1,17 @@
 mod database;
 
 pub mod client;
+pub mod conversion;
 pub mod token;
 pub mod token_misc;
-pub mod conversion;
-
 
 use std::net::SocketAddr;
 
 use axum::{
-    Router, extract::Path,
+    Router,
+    extract::Path,
     http::{self, StatusCode},
+    response::Response,
     routing::{any, get},
 };
 use axum_extra::{
@@ -18,7 +19,7 @@ use axum_extra::{
     headers::{Authorization, authorization::Bearer},
 };
 use chrono::Utc;
-use sutils::{health, tracing_setup};
+use sutils::boilerplates::{RIP, health, tracing_env_or_info};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -28,7 +29,7 @@ use crate::{
 };
 
 pub async fn _main() {
-    tracing_setup();
+    tracing_env_or_info!();
 
     DataBase::init().await.expect("database conn failed");
     spwan_periodic_tasks().await;
@@ -36,8 +37,8 @@ pub async fn _main() {
     let app = Router::new()
         .nest("/token", token_route())
         .route("/auth/{*path}", any(handle_auth_path))
-        .route("/health", get(health))
-        .fallback(health);
+        .route("/health", get(health!(^async)))
+        .fallback(health!(^async));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:6201").await.unwrap();
     info!("listen on: {listener:?}");
     axum::serve(
@@ -56,29 +57,29 @@ async fn handle_auth_path(
     method: http::Method,
     Path(path): Path<String>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-) -> (StatusCode, String) {
+) -> Response {
     let path = format!("/{path}");
     info!("{method},{path},{bearer:?}");
     let auth = match AuthToken::sql_find_access_token(bearer.token()).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
-            return (StatusCode::UNAUTHORIZED, format!("token not exists"));
+            RIP!(StatusCode::UNAUTHORIZED, format!("token not exists"));
         }
     };
 
     if auth.access.expire < Utc::now() {
         warn!("token expired");
-        return (StatusCode::UNAUTHORIZED, format!("token expired"));
+        RIP!(StatusCode::UNAUTHORIZED, format!("token expired"));
     };
 
     if !auth.claim.match_path(&path) || !auth.claim.match_method(method.as_str()) {
         warn!("claim not matched {}", auth.claim.inner.to_string());
-        return (
+        RIP!(
             StatusCode::UNAUTHORIZED,
-            format!("token not valid for this use"),
+            format!("token not valid for this use")
         );
     }
 
-    (StatusCode::OK, String::new())
+    RIP!(StatusCode::OK)
 }

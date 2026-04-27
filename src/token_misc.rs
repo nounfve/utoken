@@ -13,11 +13,10 @@ use axum_extra::{
     TypedHeader,
     headers::{Authorization, authorization::Bearer},
 };
-use cell_reg::cell_reg_named::StaticRefSingleton as _;
 use chrono::Utc;
 use http_body_util::BodyExt;
 use reqwest::StatusCode;
-use sutils::RIP;
+use sutils::{Singleton, boilerplates::RIP};
 use tokio::time::sleep;
 use tracing::{error, info};
 
