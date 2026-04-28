@@ -5,7 +5,7 @@ import { resolve } from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), dts({ tsconfigPath:"tsconfig.build.json"})],
+  plugins: [react(), dts({ tsconfigPath: "tsconfig.build.json" })],
   build: {
     lib: {
       entry: resolve(__dirname, 'lib/main.ts'),

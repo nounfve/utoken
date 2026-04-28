@@ -1,1 +1,1 @@
-export const main = () => "ok"
+export const OK = () => "ok"
