@@ -4,10 +4,12 @@ use std::str::FromStr;
 
 use axum::http::HeaderValue;
 use reqwest::{Request, Url, header::AUTHORIZATION};
+use sutils::Singleton;
 use tracing::info;
 
 use crate::token::AuthToken;
 
+#[Singleton]
 pub struct Client {
     inner: reqwest::Client,
     pub endpoint: String,
