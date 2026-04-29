@@ -1,0 +1,10 @@
+.account-page {
+    flex-direction: row;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+}
+
+.counter {
+    margin: 0;
+}

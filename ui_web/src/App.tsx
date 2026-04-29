@@ -3,6 +3,7 @@ import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import heroImg from './assets/hero.png'
 import './App.css'
+import { baseCache } from './sutils.ts/current_page'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -28,6 +29,7 @@ function App() {
         >
           Count is {count}
         </button>
+        <iframe src={`${baseCache}account`} />
       </section>
 
       <div className="ticks"></div>

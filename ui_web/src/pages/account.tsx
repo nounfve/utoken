@@ -1,16 +1,24 @@
-import { ShadowDiv } from "../sutils-ts/components/shadowDiv"
+import { useEffect, useState } from "react"
+import type { AuthToken } from "../sutils.ts/utokens"
+import { LocalTokenOne } from "../sutils.ts/token_store"
+import { baseCache } from "../sutils.ts/current_page"
+import "./account.css"
 
 export const Account = () => {
-    const isInIframe = window.top !== window.self
-    const str = JSON.stringify(isInIframe)
+    const [UT, setUT] = useState<Partial<AuthToken>>({})
+    useEffect(() => {
+        LocalTokenOne.listen_utoken((utoken) => {
+            setUT(utoken)
+        })
+    }, [])
+    const claim = (<button className="counter">{UT.claim}</button>)
+    const login = (<button className="counter" onClick={() => {
+        window.open(`${baseCache}login`, '_blank')?.focus()
+    }}>login</button>)
     return (
-        <div>
-            <p>shadow root</p>
-            <button className="counter">iniframe:{str}</button>
-            <ShadowDiv>
-                <p>shadow root</p>
-                <button className="counter">iniframe:{str}</button>
-            </ShadowDiv>
+        <div className="account-page">
+            <button>:Account:</button>
+            {UT?.access ? claim : login}
         </div>
     )
 }

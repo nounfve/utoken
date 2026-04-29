@@ -1,0 +1,15 @@
+.login-page {
+    min-width: 450px;
+    aspect-ratio: 3/4;
+    width: fit-content;
+    margin: auto;
+    background-color: aqua;
+    /* center children */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.login-page>* {
+    margin: auto;
+}

@@ -2,6 +2,7 @@ mod database;
 
 pub mod client;
 pub mod conversion;
+pub mod login;
 pub mod oauth_steam;
 pub mod token;
 pub mod token_misc;
@@ -25,7 +26,7 @@ use tracing::{error, info, warn};
 
 use crate::{
     database::DataBase,
-    oauth_steam::steam_route,
+    login::login_route,
     token::AuthToken,
     token_misc::{clean_outdated_token, token_route},
 };
@@ -38,7 +39,7 @@ pub async fn _main() {
 
     let app = Router::new()
         .nest("/token", token_route())
-        .nest("/login/steam", steam_route())
+        .nest("/login", login_route())
         .route("/auth/{*path}", any(handle_auth_path))
         .route("/health", get(health!(^async)))
         .fallback(health!(^async));

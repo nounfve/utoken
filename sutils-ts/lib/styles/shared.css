@@ -11,6 +11,12 @@
     padding: 0px;
 }
 
+#root{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
 @keyframes wiggle-kframe {
     0% {
         transform: rotate(0deg);
@@ -32,3 +38,4 @@
         transform: rotate(0deg);
     }
 }
+
