@@ -1,0 +1,10 @@
+name: utoken
+services:
+  utoken:
+    image: local/utoken
+    build:
+      context: ./xbin/
+      dockerfile: ../build.Dockerfile
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "sha256sum $(which utoken)"
