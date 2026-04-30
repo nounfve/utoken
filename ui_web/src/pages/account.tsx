@@ -1,17 +1,10 @@
-import { useEffect, useState } from "react"
-import type { AuthToken } from "../sutils.ts/utokens"
-import { LocalTokenOne } from "../sutils.ts/token_store"
+import { UtokenStore } from "../sutils.ts/utokens"
 import { baseCache } from "../sutils.ts/current_page"
 import "./account.css"
 
 export const Account = () => {
-    const [UT, setUT] = useState<Partial<AuthToken>>({})
-    useEffect(() => {
-        LocalTokenOne.listen_utoken((utoken) => {
-            setUT(utoken)
-        })
-    }, [])
-    const claim = (<button className="counter">{UT.claim}</button>)
+    const UT = UtokenStore.useAsExternalStore()
+    const claim = (<button className="counter">{UT?.claim}</button>)
     const login = (<button className="counter" onClick={() => {
         window.open(`${baseCache}login`, '_blank')?.focus()
     }}>login</button>)

@@ -1,3 +1,4 @@
+import { ObjectInLocalStorage } from "./externalStore";
 export interface Token {
     content: string,
     expire: string,
@@ -8,3 +9,5 @@ export interface AuthToken {
     access: Token,
     refresh: Token,
 }
+
+export const UtokenStore = new ObjectInLocalStorage<AuthToken>("utoken");

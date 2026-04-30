@@ -1,9 +1,9 @@
-pub fn login_route() -> Router {
+pub fn account_route() -> Router {
     Router::new()
         .nest("/steam", steam_route())
         .route("/.ui./", get(bridge_dist_slash))
         .route("/.ui./{*path}", get(bridge_dist))
-        .fallback(async || Redirect::to("/login/.ui./"))
+        .fallback(async || Redirect::to("/@me/.ui./"))
 }
 
 async fn bridge_dist_slash() -> Response {

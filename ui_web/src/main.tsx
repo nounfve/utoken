@@ -13,12 +13,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename={lastbase("/.ui./")}>
       <Routes>
-        <Route index element={<></>} />
         <Route path="/.dev" element={<App />} />
         <Route path='/account' element={<Account />} />
         <Route path='/login' element={<Login />} />
         <Route path='/.set_token' element={<SetToken />} />
-        <Route path='*' element={<Navigate to="/" />} />
+        <Route path='*' element={<Navigate to="/account" />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
