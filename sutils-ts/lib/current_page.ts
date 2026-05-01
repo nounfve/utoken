@@ -10,7 +10,7 @@ export const currentPage = (path: string = window.location.pathname) => {
 export let baseCache = "/";
 export const lastbase = (base: string, path: string = window.location.pathname) => {
     const baseRfind = path.lastIndexOf(base) + base.length;
-    baseCache = path.substring(0, baseRfind);
+    baseCache = Number.isNaN(baseRfind) ? "/" : path.substring(0, baseRfind);
     return baseCache
 }
 

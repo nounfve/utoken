@@ -91,7 +91,7 @@ async fn get_utoken_from_claim(claim: String) -> anyhow::Result<AuthToken> {
 
     let steam_id = steam_id.parse::<i64>()?;
 
-    let utoken_claim = format!("u://+delete+put+patch@{steam_id}.steam_token/**");
+    let utoken_claim = format!("u://+delete+put+patch@{steam_id}.steam/**");
     let token = Client::One().create_token(utoken_claim).await?;
     Ok(token)
 }

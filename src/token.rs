@@ -4,7 +4,7 @@ use axum::http::Uri;
 use chrono::{DateTime, Duration, Utc};
 use glob::Pattern;
 use sqlx::{FromRow, Row, postgres::PgRow};
-use sutils::Singleton;
+use sutils::{IntoOption, Singleton};
 use tracing::error;
 use uuid::Uuid;
 
@@ -46,6 +46,7 @@ impl AuthToken {
     pub const REFRESH_EXPIRE: i64 = Self::ACCESS_EXPIRE * 180; // 30 days
     pub const UTOKEN_ACCESS: &str = "uA";
     pub const UTOKEN_REFRESH: &str = "uR";
+    pub const HEAD_X_SCOPE: &str = "X-Claim-Scope";
 }
 
 impl Token {
@@ -74,7 +75,7 @@ impl Claim {
 
     pub fn scope_only(&self) -> Self {
         Self {
-            inner: Uri::from_str(&self.parse_scope_name().unwrap_or(format!("."))).unwrap(),
+            inner: Uri::from_str(&self.parse_scope_name()).unwrap(),
         }
     }
 }
@@ -132,11 +133,13 @@ impl Claim {
         }
     }
 
-    pub fn parse_scope_name(&self) -> Option<String> {
+    pub fn parse_scope_name(&self) -> &str {
         self.inner
             .host()
             .map(|s| s.trim_end_matches("."))
-            .map(|s| if s.is_empty() { "." } else { s }.into())
+            .map(|s| if s.is_empty() { s.None() } else { s.Some() })
+            .flatten()
+            .unwrap_or(".")
     }
 }
 

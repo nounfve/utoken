@@ -1,8 +1,8 @@
 mod database;
 
+pub mod account;
 pub mod client;
 pub mod conversion;
-pub mod account;
 pub mod oauth_steam;
 pub mod token;
 pub mod token_misc;
@@ -25,8 +25,8 @@ use sutils::boilerplates::{RIP, health, tracing_env_or_info};
 use tracing::{error, info, warn};
 
 use crate::{
-    database::DataBase,
     account::account_route,
+    database::DataBase,
     token::AuthToken,
     token_misc::{clean_outdated_token, token_route},
 };
@@ -60,30 +60,36 @@ async fn spwan_periodic_tasks() {
 async fn handle_auth_path(
     method: http::Method,
     Path(path): Path<String>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    bearer: Option<TypedHeader<Authorization<Bearer>>>,
 ) -> Response {
+    let bearer = bearer.map(|auth| auth.0.0);
     let path = format!("/{path}");
     info!("{method},{path},{bearer:?}");
+
+    let Some(bearer) = bearer else {
+        RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
+    };
+
     let auth = match AuthToken::sql_find_access_token(bearer.token()).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
-            RIP!(StatusCode::UNAUTHORIZED, format!("token not exists"));
+            RIP!(StatusCode::UNAUTHORIZED, "token not exists");
         }
     };
 
     if auth.access.expire < Utc::now() {
         warn!("token expired");
-        RIP!(StatusCode::UNAUTHORIZED, format!("token expired"));
+        RIP!(StatusCode::UNAUTHORIZED, "token expired");
     };
 
     if !auth.claim.match_path(&path) || !auth.claim.match_method(method.as_str()) {
         warn!("claim not matched {}", auth.claim.inner.to_string());
-        RIP!(
-            StatusCode::UNAUTHORIZED,
-            format!("token not valid for this use")
-        );
+        RIP!(StatusCode::UNAUTHORIZED, "token not valid for this use");
     }
 
-    RIP!(StatusCode::OK)
+    RIP!(
+        StatusCode::OK,
+        [(AuthToken::HEAD_X_SCOPE, auth.claim.parse_scope_name())]
+    )
 }
