@@ -4,7 +4,7 @@ use axum::http::Uri;
 use chrono::{DateTime, Duration, Utc};
 use glob::Pattern;
 use sqlx::{FromRow, Row, postgres::PgRow};
-use sutils::{IntoOption, Singleton};
+use sutils::{IntoOption, IntoResult, Singleton};
 use tracing::error;
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ pub struct AuthToken {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Token {
-    pub content: String,
+    pub content: Uuid,
     pub expire: DateTime<Utc>,
 }
 
@@ -31,46 +31,42 @@ pub struct Claim {
 }
 
 impl AuthToken {
-    pub fn new(claim: Claim) -> Self {
-        let access = Token::new(Self::ACCESS_EXPIRE);
-        let refresh = Token::new(Self::REFRESH_EXPIRE);
-
-        Self {
-            claim,
-            access,
-            refresh,
-        }
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
     }
 
-    pub const ACCESS_EXPIRE: i64 = 4 * 60 * 60 * 1000; // 4hr
-    pub const REFRESH_EXPIRE: i64 = Self::ACCESS_EXPIRE * 180; // 30 days
+    pub const ACCESS_EXPIRE: Duration = Duration::hours(4);
+    pub const REFRESH_EXPIRE: Duration = Duration::days(30);
     pub const UTOKEN_ACCESS: &str = "uA";
     pub const UTOKEN_REFRESH: &str = "uR";
     pub const HEAD_X_SCOPE: &str = "X-Claim-Scope";
 }
 
 impl Token {
-    pub fn new(expire: i64) -> Self {
-        let expire = Utc::now() + Duration::milliseconds(expire);
-        Self {
-            content: Uuid::new_v4().to_string(),
-            expire,
-        }
+    pub fn new(unique: Uuid, alive: Duration) -> Self {
+        let expire = Utc::now() + alive;
+        Self { content: unique, expire }
     }
 }
 
 impl Claim {
     pub fn from_str(str: &str) -> anyhow::Result<Self> {
-        let this = Self {
-            inner: Uri::from_str(str)?,
-        };
+        let this = Self { inner: Uri::from_str(str)? };
         Ok(this)
     }
 
+    pub fn user_name(&self) -> Option<&str> {
+        self.inner
+            .authority()
+            .map(|a| a.as_str().split("@").next())
+            .flatten()
+            .unwrap_or("")
+            .split(":")
+            .next()
+    }
+
     pub fn reducted() -> Self {
-        Self {
-            inner: Uri::from_static("~"),
-        }
+        Self { inner: Uri::from_static("~") }
     }
 
     pub fn scope_only(&self) -> Self {
@@ -98,39 +94,27 @@ impl Claim {
     }
 
     pub fn match_method(&self, method: &str) -> bool {
-        let user_info = self
-            .inner
-            .authority()
-            .map(|a| a.as_str().split("@").next().unwrap_or(""))
-            .unwrap_or("");
-        let username_as_allowed = user_info
-            .split(":")
-            .next()
+        let user_name = self
+            .user_name()
             .unwrap_or("")
             .replace("+", ":+")
             .replace("-", ":-")
+            .to_lowercase();
+
+        let username_as_allowed = user_name // breakline
             .split(":")
-            .map(|str| str.to_lowercase())
-            .collect::<Vec<_>>();
+            .skip_while(|str| str.is_empty());
 
         let allow = &mut HashSet::from(["get", "post"]);
-        let deny = &mut HashSet::new();
-        username_as_allowed.iter().for_each(|e| {
-            if e.starts_with("+") {
-                allow.insert(&e[1..]);
-            } else if e.starts_with("-") {
-                deny.insert(&e[1..]);
-            }
-        });
-
-        let method = method.to_lowercase();
-        if deny.contains(method.as_str()) {
-            false
-        } else if allow.contains(&method.as_str()) {
-            true
-        } else {
-            false
+        for val in username_as_allowed {
+            match val.split_at(1) {
+                ("+", val) => allow.insert(val),
+                ("-", val) => allow.remove(val),
+                _ => false,
+            };
         }
+
+        allow.contains(&*method.to_lowercase())
     }
 
     pub fn parse_scope_name(&self) -> &str {
@@ -144,57 +128,93 @@ impl Claim {
 }
 
 impl AuthToken {
-    pub async fn sql_insert_token(&self) -> anyhow::Result<()> {
-        let db = DataBase::One();
-        let _result = sqlx::query(
-            "INSERT INTO utokens 
-            (access,access_expire,refresh,refresh_expire,scope,claim) VALUES 
-            ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(&self.access.content)
-        .bind(&self.access.expire)
-        .bind(&self.refresh.content)
-        .bind(&self.refresh.expire)
-        .bind(&self.claim.parse_scope_name())
-        .bind(&self.claim.inner.to_string())
-        .execute(&db.conn)
-        .await?;
-        Ok(())
+    pub async fn sql_insert_token(claim: Claim, parent: Option<&Uuid>) -> anyhow::Result<Self> {
+        let sql = r#"
+            INSERT INTO utokens (
+                    refresh,
+                    scope,
+                    claim,
+                    child_of
+                )
+            VALUES (
+                    gen_random_uuid(),
+                    $1,
+                    $2,
+                    $3
+                )
+            RETURNING (refresh);
+        "#;
+        let row = sqlx::query(sql)
+            .bind(claim.parse_scope_name())
+            .bind(claim.inner.to_string())
+            .bind(parent)
+            .fetch_one(&DataBase::One().conn)
+            .await?;
+
+        let refresh = row.try_get::<Uuid, _>("refresh")?;
+
+        Self::sql_refresh_token(&refresh).await
     }
 
-    pub async fn sql_find_access_token(token: &str) -> anyhow::Result<Self> {
-        let db = DataBase::One();
-        let token = sqlx::query_as(
-            "SELECT * FROM utokens 
-            WHERE access = $1",
-        )
-        .bind(token)
-        .fetch_one(&db.conn)
-        .await?;
-        Ok(token)
+    pub async fn sql_refresh_token(refresh: &Uuid) -> anyhow::Result<Self> {
+        let sql = r#"
+            UPDATE utokens
+            SET access = gen_random_uuid(),
+                access_expire = now() + ($2 * interval '1 second'),
+                refresh = gen_random_uuid(),
+                refresh_expire = now() + ($3 * interval '1 second')
+            where refresh = $1
+            RETURNING *;
+        "#;
+        let row = sqlx::query(sql)
+            .bind(refresh)
+            .bind(AuthToken::ACCESS_EXPIRE.num_seconds())
+            .bind(AuthToken::REFRESH_EXPIRE.num_seconds())
+            .fetch_one(&DataBase::One().conn)
+            .await?;
+        AuthToken::from_row(&row)?.Ok()
     }
 
-    pub async fn sql_find_refresh_token(token: &str) -> anyhow::Result<Self> {
-        let db = DataBase::One();
-        let token = sqlx::query_as(
-            "SELECT * FROM utokens 
-            WHERE refresh = $1",
-        )
-        .bind(token)
-        .fetch_one(&db.conn)
-        .await?;
-        Ok(token)
+    pub async fn sql_find_access_token(access: &Uuid) -> anyhow::Result<Self> {
+        let sql = r#"
+            SELECT *
+            FROM utokens
+            where access = $1
+                AND refresh_expire > now();
+        "#;
+        let row = sqlx::query(sql)
+            .bind(access)
+            .fetch_one(&DataBase::One().conn)
+            .await?;
+        AuthToken::from_row(&row)?.Ok()
     }
 
-    pub async fn sql_delete_token(&self) -> anyhow::Result<()> {
-        let db = DataBase::One();
-        let _result = sqlx::query(
-            "DELETE FROM utokens 
-            WHERE refresh = $1",
-        )
-        .bind(&self.refresh.content)
-        .execute(&db.conn)
-        .await?;
+    pub async fn sql_find_refresh_token(refresh: &Uuid) -> anyhow::Result<Self> {
+        let sql = r#"
+            SELECT *
+            FROM utokens
+            where refresh = $1
+                AND refresh_expire > now();
+        "#;
+        let row = sqlx::query(sql)
+            .bind(refresh)
+            .fetch_one(&DataBase::One().conn)
+            .await?;
+        AuthToken::from_row(&row)?.Ok()
+    }
+
+    pub async fn sql_delete_token(refresh: &Uuid) -> anyhow::Result<()> {
+        let sql = r#"
+            DELETE 
+            FROM utokens
+            where refresh = $1
+            RETURNING *;
+        "#;
+        let row = sqlx::query(sql)
+            .bind(refresh)
+            .fetch_one(&DataBase::One().conn)
+            .await?;
+        AuthToken::from_row(&row)?;
         Ok(())
     }
 }
@@ -202,7 +222,7 @@ impl AuthToken {
 impl FromRow<'_, PgRow> for AuthToken {
     fn from_row(row: &'_ PgRow) -> Result<Self, sqlx::Error> {
         let claim = Claim::from_str(row.try_get("claim")?).unwrap();
-        Ok(Self {
+        Self {
             claim,
             access: Token {
                 content: row.try_get("access")?,
@@ -212,6 +232,7 @@ impl FromRow<'_, PgRow> for AuthToken {
                 content: row.try_get("refresh")?,
                 expire: row.try_get("refresh_expire")?,
             },
-        })
+        }
+        .Ok()
     }
 }

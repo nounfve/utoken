@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::{Ok, anyhow};
 use axum::http::HeaderMap;
 use axum_extra::extract::{
@@ -6,13 +8,14 @@ use axum_extra::extract::{
 };
 use reqwest::header::SET_COOKIE;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::token::{AuthToken, Claim, Token};
 
 impl Token {
     pub fn into_cookie<'c>(self, name: &'c str) -> Cookie<'c> {
         let expire = OffsetDateTime::from_unix_timestamp(self.expire.timestamp()).unwrap();
-        Cookie::build((name, self.content))
+        Cookie::build((name, self.content.to_string()))
             .expires(expire)
             .http_only(true)
             .path("/")
@@ -25,9 +28,8 @@ impl<'c> TryFrom<&Cookie<'c>> for Token {
 
     fn try_from(value: &Cookie<'c>) -> Result<Self, Self::Error> {
         let content = value.value().to_string();
-        if content.is_empty() {
-            Err(anyhow!("empty content"))?
-        }
+        let content = Uuid::from_str(&content)?;
+        
         let expire = if let Some(Expiration::DateTime(expire)) = value.expires() {
             chrono::DateTime::from_timestamp(expire.unix_timestamp(), 0).unwrap()
         } else {
@@ -80,4 +82,3 @@ fn cookies_from_request(headers: &HeaderMap) -> impl Iterator<Item = Cookie<'sta
         .filter_map(|value| value.to_str().ok())
         .map(|c| Cookie::parse_encoded(c.to_string()).unwrap())
 }
-

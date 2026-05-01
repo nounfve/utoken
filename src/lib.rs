@@ -1,35 +1,12 @@
 mod database;
 
 pub mod account;
+pub mod axum_extract;
 pub mod client;
 pub mod conversion;
 pub mod oauth_steam;
 pub mod token;
-pub mod token_misc;
-
-use std::net::SocketAddr;
-
-use axum::{
-    Router,
-    extract::Path,
-    http::{self, StatusCode},
-    response::Response,
-    routing::{any, get},
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
-use chrono::Utc;
-use sutils::boilerplates::{RIP, health, tracing_env_or_info};
-use tracing::{error, info, warn};
-
-use crate::{
-    account::account_route,
-    database::DataBase,
-    token::AuthToken,
-    token_misc::{clean_outdated_token, token_route},
-};
+pub mod token_route;
 
 pub async fn _main() {
     tracing_env_or_info!();
@@ -60,17 +37,20 @@ async fn spwan_periodic_tasks() {
 async fn handle_auth_path(
     method: http::Method,
     Path(path): Path<String>,
-    bearer: Option<TypedHeader<Authorization<Bearer>>>,
+    bearer: OptionBearer,
 ) -> Response {
-    let bearer = bearer.map(|auth| auth.0.0);
     let path = format!("/{path}");
     info!("{method},{path},{bearer:?}");
 
-    let Some(bearer) = bearer else {
+    let Some(bearer) = &*bearer else {
         RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
     };
 
-    let auth = match AuthToken::sql_find_access_token(bearer.token()).await {
+    let Ok(access) = Uuid::from_str(bearer.token()) else {
+        RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
+    };
+
+    let auth = match AuthToken::sql_find_access_token(&access).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
@@ -93,3 +73,25 @@ async fn handle_auth_path(
         [(AuthToken::HEAD_X_SCOPE, auth.claim.parse_scope_name())]
     )
 }
+
+use std::{net::SocketAddr, str::FromStr};
+
+use axum::{
+    Router,
+    extract::Path,
+    http::{self, StatusCode},
+    response::Response,
+    routing::{any, get},
+};
+use chrono::Utc;
+use sutils::boilerplates::{RIP, health, tracing_env_or_info};
+use tracing::{error, info, warn};
+use uuid::Uuid;
+
+use crate::{
+    account::account_route,
+    axum_extract::OptionBearer,
+    database::DataBase,
+    token::AuthToken,
+    token_route::{clean_outdated_token, token_route},
+};

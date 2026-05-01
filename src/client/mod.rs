@@ -45,7 +45,7 @@ impl Client {
         let resp = self
             .inner
             .put(url)
-            .body(token.refresh.content)
+            .body(token.refresh.content.to_string())
             .send()
             .await?
             .error_for_status()?;

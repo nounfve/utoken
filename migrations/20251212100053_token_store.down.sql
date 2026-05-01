@@ -1,2 +1,2 @@
 -- Add down migration script here
-DROP TABLE utokens;
+DROP TABLE IF EXISTS utokens;
