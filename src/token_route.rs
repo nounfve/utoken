@@ -3,6 +3,7 @@ pub fn token_route() -> Router {
         .route("/create", put(token_create))
         .route("/refresh", put(token_refresh))
         .route("/info", get(token_info))
+        .route("/delete", delete(token_delete))
 }
 
 async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: String) -> Response {
@@ -50,16 +51,21 @@ async fn token_refresh(token: String) -> Response {
     RIP!(StatusCode::OK, auth.to_json())
 }
 
+async fn token_delete(bearer: OptionBearer) -> Response {
+    check_bearer_is_some!(bearer);
+    match AuthToken::sql_delete_token(&bearer).await {
+        Ok(_) => (),
+        Err(err) => {
+            warn!("[maybe error delete failed] {err}");
+        }
+    };
+    RIP!(StatusCode::NO_CONTENT)
+}
+
 async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
-    let Some(bearer) = &*bearer else {
-        RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
-    };
+    check_bearer_is_some!(bearer);
 
-    let Ok(access) = Uuid::from_str(bearer.token()) else {
-        RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
-    };
-
-    let mut auth = match AuthToken::sql_find_access_token(&access).await {
+    let auth = match AuthToken::sql_find_access_token(&bearer).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
@@ -70,38 +76,28 @@ async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
     if let Some(refresh) = &*refresh
         && auth.access.expire - Utc::now() < AuthToken::ACCESS_EXPIRE / 1000 / 8
     {
-        let resp = token_refresh(refresh.clone()).await;
-        if !resp.status().is_success() {
-            return resp;
-        }
-        let body = resp.into_body().collect().await.unwrap().to_bytes();
-        auth = serde_json::from_slice(&body).unwrap();
-    } else {
-        auth.claim = auth.claim.scope_only()
+        return token_refresh(refresh.clone()).await;
     }
 
     if auth.access.expire < Utc::now() {
         RIP!(StatusCode::UNAUTHORIZED, "expired token")
     }
 
-    RIP!(StatusCode::OK, auth.to_json())
+    let scop_only = json!({"claim":auth.claim.scope_only()}).to_string();
+    RIP!(StatusCode::OK, scop_only)
 }
 
-pub async fn clean_outdated_token() {
-    loop {
-        if let Err(err) = sqlx::query(
-            "DELETE FROM utokens
-            WHERE refresh_expire < NOW()",
-        )
-        .execute(&DataBase::One().conn)
-        .await
-        {
-            error!("{err}");
-            sleep(Duration::from_secs(60)).await;
-            continue;
-        }
-        sleep(Duration::from_secs(60 * 60 * 22)).await
-    }
+#[PutInMacro(inline_macro)]
+macro_rules! check_bearer_is_some {
+    ($B:ident) => {
+        let Some($B) = &*$B else {
+            RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
+        };
+
+        let Ok($B) = Uuid::from_str($B.token()) else {
+            RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
+        };
+    };
 }
 
 const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -109,25 +105,22 @@ const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 use std::{
     net::{Ipv4Addr, SocketAddr},
     str::FromStr,
-    time::Duration,
 };
 
 use axum::{
     Router,
     extract::ConnectInfo,
     response::Response,
-    routing::{get, put},
+    routing::{delete, get, put},
 };
 use chrono::Utc;
-use http_body_util::BodyExt;
 use reqwest::StatusCode;
-use sutils::{Singleton, boilerplates::RIP};
-use tokio::time::sleep;
-use tracing::{error, info};
+use serde_json::json;
+use sutils::{PutInMacro, boilerplates::RIP, inline_macro};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
     axum_extract::{OptionBearer, Q_refresh},
-    database::DataBase,
     token::{AuthToken, Claim},
 };

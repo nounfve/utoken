@@ -31,7 +31,7 @@ pub async fn _main() {
 }
 
 async fn spwan_periodic_tasks() {
-    tokio::spawn(clean_outdated_token());
+    tokio::spawn(AuthToken::clean_outdated_token());
 }
 
 async fn handle_auth_path(
@@ -42,18 +42,11 @@ async fn handle_auth_path(
     let path = format!("/{path}");
     info!("{method},{path},{bearer:?}");
 
-    let Some(bearer) = &*bearer else {
-        RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
-    };
-
-    let Ok(access) = Uuid::from_str(bearer.token()) else {
-        RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
-    };
-
-    let auth = match AuthToken::sql_find_access_token(&access).await {
+    check_bearer_is_some!(bearer);
+    let auth = match AuthToken::sql_find_access_token(&bearer).await {
         Ok(auth) => auth,
         Err(err) => {
-            error!("{err}");
+            warn!("{err}");
             RIP!(StatusCode::UNAUTHORIZED, "token not exists");
         }
     };
@@ -85,13 +78,10 @@ use axum::{
 };
 use chrono::Utc;
 use sutils::boilerplates::{RIP, health, tracing_env_or_info};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    account::account_route,
-    axum_extract::OptionBearer,
-    database::DataBase,
-    token::AuthToken,
-    token_route::{clean_outdated_token, token_route},
+    account::account_route, axum_extract::OptionBearer, database::DataBase, token::AuthToken,
+    token_route::token_route,
 };

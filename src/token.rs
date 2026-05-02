@@ -5,6 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use glob::Pattern;
 use sqlx::{FromRow, Row, postgres::PgRow};
 use sutils::{IntoOption, IntoResult, Singleton};
+use tokio::time::sleep;
 use tracing::error;
 use uuid::Uuid;
 
@@ -46,6 +47,10 @@ impl Token {
     pub fn new(unique: Uuid, alive: Duration) -> Self {
         let expire = Utc::now() + alive;
         Self { content: unique, expire }
+    }
+
+    pub fn as_bearer(&self) -> String {
+        format!("Bearer {}", self.content)
     }
 }
 
@@ -203,19 +208,35 @@ impl AuthToken {
         AuthToken::from_row(&row)?.Ok()
     }
 
-    pub async fn sql_delete_token(refresh: &Uuid) -> anyhow::Result<()> {
+    pub async fn sql_delete_token(access: &Uuid) -> anyhow::Result<Self> {
         let sql = r#"
             DELETE 
             FROM utokens
-            where refresh = $1
+            where access = $1
             RETURNING *;
         "#;
         let row = sqlx::query(sql)
-            .bind(refresh)
+            .bind(access)
             .fetch_one(&DataBase::One().conn)
             .await?;
-        AuthToken::from_row(&row)?;
-        Ok(())
+        AuthToken::from_row(&row)?.Ok()
+    }
+
+    pub async fn clean_outdated_token() {
+        loop {
+            if let Err(err) = sqlx::query(
+                "DELETE FROM utokens
+            WHERE refresh_expire < NOW()",
+            )
+            .execute(&DataBase::One().conn)
+            .await
+            {
+                error!("{err}");
+                sleep(Duration::seconds(60).to_std().expect("never")).await;
+                continue;
+            }
+            sleep(Duration::hours(18).to_std().expect("never")).await
+        }
     }
 }
 
