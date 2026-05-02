@@ -1,10 +1,14 @@
 mod database;
+mod test;
 
 pub mod account;
+pub mod app_route;
 pub mod axum_extract;
 pub mod client;
 pub mod conversion;
+pub mod link_bind;
 pub mod oauth_steam;
+pub mod reuse_handler;
 pub mod token;
 pub mod token_route;
 
@@ -14,17 +18,12 @@ pub async fn _main() {
     DataBase::init().await.expect("database conn failed");
     spwan_periodic_tasks().await;
 
-    let app = Router::new()
-        .nest("/token", token_route())
-        .nest("/@me", account_route())
-        .route("/auth/{*path}", any(handle_auth_path))
-        .route("/health", get(health!(^async)))
-        .fallback(health!(^async));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:6201").await.unwrap();
     info!("listen on: {listener:?}");
+
     axum::serve(
         listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
+        app_route().into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await
     .unwrap();
@@ -34,54 +33,9 @@ async fn spwan_periodic_tasks() {
     tokio::spawn(AuthToken::clean_outdated_token());
 }
 
-async fn handle_auth_path(
-    method: http::Method,
-    Path(path): Path<String>,
-    bearer: OptionBearer,
-) -> Response {
-    let path = format!("/{path}");
-    info!("{method},{path},{bearer:?}");
+use std::net::SocketAddr;
 
-    check_bearer_is_some!(bearer);
-    let auth = match AuthToken::sql_find_access_token(&bearer).await {
-        Ok(auth) => auth,
-        Err(err) => {
-            warn!("{err}");
-            RIP!(StatusCode::UNAUTHORIZED, "token not exists");
-        }
-    };
+use sutils::boilerplates::tracing_env_or_info;
+use tracing::info;
 
-    if auth.access.expire < Utc::now() {
-        warn!("token expired");
-        RIP!(StatusCode::UNAUTHORIZED, "token expired");
-    };
-
-    if !auth.claim.match_path(&path) || !auth.claim.match_method(method.as_str()) {
-        warn!("claim not matched {}", auth.claim.inner.to_string());
-        RIP!(StatusCode::UNAUTHORIZED, "token not valid for this use");
-    }
-
-    RIP!(
-        StatusCode::OK,
-        [(AuthToken::HEAD_X_SCOPE, auth.claim.parse_scope_name())]
-    )
-}
-
-use std::{net::SocketAddr, str::FromStr};
-
-use axum::{
-    Router,
-    extract::Path,
-    http::{self, StatusCode},
-    response::Response,
-    routing::{any, get},
-};
-use chrono::Utc;
-use sutils::boilerplates::{RIP, health, tracing_env_or_info};
-use tracing::{info, warn};
-use uuid::Uuid;
-
-use crate::{
-    account::account_route, axum_extract::OptionBearer, database::DataBase, token::AuthToken,
-    token_route::token_route,
-};
+use crate::{app_route::app_route, database::DataBase, token::AuthToken};

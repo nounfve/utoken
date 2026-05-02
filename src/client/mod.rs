@@ -1,10 +1,11 @@
 mod test;
 
-use reqwest::{Request, StatusCode, header::AUTHORIZATION};
+use anyhow::anyhow;
+use reqwest::{Method, Request, header::AUTHORIZATION};
 use sutils::{ContextFunction, IntoOption, IntoResult, Singleton};
 use tracing::info;
 
-use crate::token::AuthToken;
+use crate::{link_bind::LinkBind, token::AuthToken};
 
 #[Singleton]
 pub struct Client {
@@ -31,8 +32,7 @@ impl Client {
             .send()
             .await?
             .error_for_status()?;
-        let auth_json = resp.json().await?;
-        Ok(auth_json)
+        resp.json::<AuthToken>().await?.Ok()
     }
 
     pub async fn refresh_token(&self, token: &AuthToken) -> anyhow::Result<AuthToken> {
@@ -44,8 +44,7 @@ impl Client {
             .send()
             .await?
             .error_for_status()?;
-        let auth_json = resp.json().await?;
-        Ok(auth_json)
+        resp.json::<AuthToken>().await?.Ok()
     }
 
     pub async fn info_token(&self, token: &AuthToken) -> anyhow::Result<Option<AuthToken>> {
@@ -77,11 +76,46 @@ impl Client {
         ().Ok()
     }
 
-    pub async fn auth_request(
+    pub async fn create_sub_token(
         &self,
-        req: &Request,
         token: &AuthToken,
-    ) -> anyhow::Result<StatusCode> {
+        claim: String,
+    ) -> anyhow::Result<AuthToken> {
+        let url = format!("{}/token/subtoken", &self.endpoint);
+        let resp = self
+            .inner
+            .put(&url)
+            .header(AUTHORIZATION, token.access.as_bearer())
+            .body(claim)
+            .send()
+            .await?
+            .error_for_status()?;
+        resp.json::<AuthToken>().await?.Ok()
+    }
+
+    pub async fn link_bind(&self, req: &Request, token: &AuthToken) -> anyhow::Result<String> {
+        let method = req.method().clone();
+        let req_url = req.url();
+        let query = req_url.query().map(|q| format!("?{q}")).unwrap_or_default();
+        let url = format!("{}/bind{}{query}", self.endpoint, req_url.path());
+        let access = token.access.as_bearer().try_into()?;
+
+        let link_req = reqwest::Request::new(method, url.as_str().try_into()?)
+            .apply(|r| r.headers_mut().insert(AUTHORIZATION, access));
+        let resp = self.inner.execute(link_req).await?.error_for_status()?;
+        resp.text().await?.Ok()
+    }
+
+    pub async fn resolve_link(&self, method: Method, link: &str) -> anyhow::Result<String> {
+        let url = format!("{}/link/{link}", self.endpoint);
+
+        let link_req = reqwest::Request::new(method, url.as_str().try_into()?);
+        let resp = self.inner.execute(link_req).await?.error_for_status()?;
+        let link = LinkBind::from_headers(resp.headers());
+        link.to_path_query().Ok()
+    }
+
+    pub async fn auth_request(&self, req: &Request, token: &AuthToken) -> anyhow::Result<String> {
         let method = req.method().clone();
         let url = format!("{}/auth{}", self.endpoint, req.url().path());
         let access = token.access.as_bearer().try_into()?;
@@ -90,8 +124,13 @@ impl Client {
             .apply(|r| r.headers_mut().insert(AUTHORIZATION, access));
         let resp = self.inner.execute(auth_req).await?.error_for_status()?;
         let status = resp.status();
-        let body = resp.text().await?;
-        info!("{url} [{status}] {body}");
-        Ok(status)
+        let namespace = resp
+            .headers()
+            .get(AuthToken::HEAD_X_SCOPE)
+            .ok_or(anyhow!("missing header {}", AuthToken::HEAD_X_SCOPE))?
+            .to_str()?
+            .to_owned();
+        info!("{url} [{status}] {namespace}");
+        namespace.Ok()
     }
 }

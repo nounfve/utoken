@@ -1,5 +1,5 @@
 #[derive(Debug, Deref, DerefMut)]
-pub struct OptionBearer(Option<Bearer>);
+pub struct OptionBearer(pub Option<String>);
 
 impl<S: Send + Sync> FromRequestParts<S> for OptionBearer {
     type Rejection = TypedHeaderRejection;
@@ -8,13 +8,12 @@ impl<S: Send + Sync> FromRequestParts<S> for OptionBearer {
         type _H = Option<TypedHeader<Authorization<Bearer>>>;
         let auth = _H::from_request_parts(parts, state)
             .await?
-            .map(|auth| auth.0.0);
+            .map(|auth| auth.0.0.token().to_string());
         OptionBearer(auth).Ok()
     }
 }
 
 query_extract!(refresh);
-query_extract!(sub);
 
 #[PutInMacro(inline_macro)]
 macro_rules! query_extract {
@@ -22,7 +21,7 @@ macro_rules! query_extract {
         sutils::external::paste! {
             #[allow(nonstandard_style)]
             #[derive(serde::Deserialize, Debug, Deref, DerefMut)]
-            pub struct [<Q_ $Q>](Option<String>);
+            pub struct [<Q_ $Q>](pub Option<String>);
 
             impl<S: Send + Sync> FromRequestParts<S> for [<Q_ $Q>] {
                 type Rejection = QueryRejection;

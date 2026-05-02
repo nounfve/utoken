@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use tracing::info;
+use reqwest::Method;
 
 use crate::_main;
 
@@ -16,18 +16,28 @@ async fn test_create_token() {
     let client = Client::default();
 
     let mut token = client
-        .create_token(format!("u://+delete-post@./some-claim"))
+        .create_token(format!("u://+delete-post@./*"))
+        .await
+        .unwrap();
+
+    let sub_token = client
+        .create_sub_token(&token, format!("u://no-effect@no-effect./some-claim"))
         .await
         .unwrap();
 
     let mut req = reqwest::Request::new(
         reqwest::Method::GET,
-        "https://some-damain/some-claim".try_into().unwrap(),
+        "https://some-damain/some-claim?some=query"
+            .try_into()
+            .unwrap(),
     );
+
+    let link = client.link_bind(&req, &token).await.unwrap();
+
     {
         // test default allow
         let resp = client.auth_request(&req, &token).await;
-        assert!(resp.unwrap().is_success());
+        assert!(&resp.unwrap() == ".");
 
         *req.method_mut() = reqwest::Method::POST;
         let resp = client.auth_request(&req, &token).await;
@@ -35,17 +45,16 @@ async fn test_create_token() {
 
         *req.method_mut() = reqwest::Method::DELETE;
         let resp = client.auth_request(&req, &token).await;
-        assert!(resp.unwrap().is_success());
+        assert!(&resp.unwrap() == ".");
     }
 
     {
         // test info noop when access not near expire
         let info_refresh = client.info_token(&token).await;
-        info!("{:?}", info_refresh);
         assert!(info_refresh.unwrap().is_none());
 
         let resp = client.auth_request(&req, &token).await;
-        assert!(resp.unwrap().is_success());
+        assert!(&resp.unwrap() == ".");
     }
 
     {
@@ -58,9 +67,17 @@ async fn test_create_token() {
         assert!(resp.is_err());
 
         let resp = client.auth_request(&req, &token2).await;
-        assert!(resp.unwrap().is_success());
+        assert!(&resp.unwrap() == ".");
 
         let _ = std::mem::replace(&mut token, token2);
+    }
+
+    {
+        let resp = client.auth_request(&req, &sub_token).await;
+        assert!(&resp.unwrap() == ".");
+
+        let resolved = client.resolve_link(Method::GET, &link).await;
+        assert!(resolved.unwrap() == "/some-claim?some=query")
     }
 
     {
@@ -69,5 +86,12 @@ async fn test_create_token() {
 
         let resp = client.auth_request(&req, &token).await;
         assert!(resp.is_err());
+
+        let resp = client.auth_request(&req, &sub_token).await;
+        assert!(resp.is_err());
+
+        let resolved = client.resolve_link(Method::GET, &link).await;
+        assert!(resolved.is_err())
+
     }
 }

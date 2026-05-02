@@ -1,5 +1,6 @@
 use std::{collections::HashSet, str::FromStr};
 
+use anyhow::anyhow;
 use axum::http::Uri;
 use chrono::{DateTime, Duration, Utc};
 use glob::Pattern;
@@ -79,6 +80,23 @@ impl Claim {
             inner: Uri::from_str(&self.parse_scope_name()).unwrap(),
         }
     }
+
+    pub fn sub_claim(&self, url: &str) -> anyhow::Result<Self> {
+        let url = Uri::from_str(url)?;
+        if !self.match_path(url.path()) {
+            return anyhow!("not valid child claim").Err();
+        }
+        let scheme = match self.inner.scheme_str() {
+            Some(s) => format!("{s}://"),
+            None => String::new(),
+        };
+        let auth = match self.inner.authority() {
+            Some(auth) => auth.to_string(),
+            None => String::new(),
+        };
+        let url = format!("{scheme}{auth}{}", url.path());
+        Self::from_str(&url)?.Ok()
+    }
 }
 
 impl Claim {
@@ -91,11 +109,7 @@ impl Claim {
             }
         };
 
-        if !pattern.matches(&path) {
-            return false;
-        };
-
-        true
+        pattern.matches(&path)
     }
 
     pub fn match_method(&self, method: &str) -> bool {
@@ -135,18 +149,8 @@ impl Claim {
 impl AuthToken {
     pub async fn sql_insert_token(claim: Claim, parent: Option<&Uuid>) -> anyhow::Result<Self> {
         let sql = r#"
-            INSERT INTO utokens (
-                    refresh,
-                    scope,
-                    claim,
-                    child_of
-                )
-            VALUES (
-                    gen_random_uuid(),
-                    $1,
-                    $2,
-                    $3
-                )
+            INSERT INTO utokens (refresh, scope, claim, child_of)
+            VALUES (gen_random_uuid(), $1, $2, $3)
             RETURNING (refresh);
         "#;
         let row = sqlx::query(sql)

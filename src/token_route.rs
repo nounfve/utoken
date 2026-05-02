@@ -4,6 +4,7 @@ pub fn token_route() -> Router {
         .route("/refresh", put(token_refresh))
         .route("/info", get(token_info))
         .route("/delete", delete(token_delete))
+        .route("/subtoken", put(sub_token_create))
 }
 
 async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: String) -> Response {
@@ -62,7 +63,7 @@ async fn token_delete(bearer: OptionBearer) -> Response {
     RIP!(StatusCode::NO_CONTENT)
 }
 
-async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
+pub async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
     check_bearer_is_some!(bearer);
 
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
@@ -87,6 +88,30 @@ async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
     RIP!(StatusCode::OK, scop_only)
 }
 
+async fn sub_token_create(bearer: OptionBearer, claim: String) -> Response {
+    check_bearer_is_some!(bearer);
+
+    let auth = match AuthToken::sql_find_access_token(&bearer).await {
+        Ok(auth) => auth,
+        Err(err) => {
+            error!("{err}");
+            RIP!(StatusCode::UNAUTHORIZED, "invlid token");
+        }
+    };
+
+    if auth.access.expire < Utc::now() {
+        RIP!(StatusCode::UNAUTHORIZED, "expired token")
+    }
+
+    let mut sub = match create_sub_token(&auth, &claim).await {
+        Ok(val) => val,
+        Err(err) => RIP!(err),
+    };
+
+    sub.claim = sub.claim.scope_only();
+    RIP!(StatusCode::CREATED, sub.to_json())
+}
+
 #[PutInMacro(inline_macro)]
 macro_rules! check_bearer_is_some {
     ($B:ident) => {
@@ -94,7 +119,7 @@ macro_rules! check_bearer_is_some {
             RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
         };
 
-        let Ok($B) = Uuid::from_str($B.token()) else {
+        let Ok($B) = <uuid::Uuid as std::str::FromStr>::from_str($B) else {
             RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
         };
     };
@@ -122,5 +147,6 @@ use uuid::Uuid;
 
 use crate::{
     axum_extract::{OptionBearer, Q_refresh},
+    reuse_handler::create_sub_token,
     token::{AuthToken, Claim},
 };
