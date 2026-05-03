@@ -39,14 +39,16 @@ export class ObjectStore<T> extends ExternalStore<T, undefined> {
     }
 
     update(value: Partial<T>) {
-        this.value = { ...this.value, ...value }
+        this.mutate((current) => ({ ...current, ...value }))
+    }
+
+    mutate(func: (current: T) => T) {
+        this.value = func(this.value)
         this.notify_all()
     }
 
-    mutate(func: (current: T) => Partial<T>) {
-        const value = func(this.value)
-        this.update(value)
-    }
+    useAsState = (): [T, (t: Partial<T>) => void] => [this.useAsExternalStore(), (val: Partial<T>) => this.update(val)]
+
 }
 
 export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
@@ -54,9 +56,15 @@ export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
     constructor(storeKey: string) {
         super(undefined as unknown as T)
         this.storeKey = storeKey
-        window.addEventListener('storage', (event) => this.onStoreChange(event))
+        window.addEventListener('storage', this.onStoreChange)
         // mock event on init
-        this.onStoreChange({ key: this.storeKey } as StorageEvent)
+        this.mockEvent()
+    }
+
+    mockEvent = () => {
+        const event = new Event("storage") as Event & { key: string };
+        event.key = this.storeKey;
+        window.dispatchEvent(event)
     }
 
     onStoreChange = (event: StorageEvent) => {
@@ -65,9 +73,9 @@ export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
             const str = localStorage.getItem(this.storeKey)
             const obj = JSON.parse(str!)
             if (!obj) throw "empty obj";
-            super.update(obj)
+            super.mutate(() => obj)
         } catch {
-            super.update(undefined)
+            super.mutate(() => undefined)
         }
     }
 
@@ -79,6 +87,7 @@ export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
             const str = JSON.stringify(value)
             localStorage.setItem(this.storeKey, str)
         }
+        this.mockEvent()
     }
 
 }

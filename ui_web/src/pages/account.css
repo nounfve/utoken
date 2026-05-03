@@ -5,6 +5,10 @@
     text-align: center;
 }
 
+.account-menu{
+    height: 100%;
+}
+
 .counter {
     margin: 0;
 }

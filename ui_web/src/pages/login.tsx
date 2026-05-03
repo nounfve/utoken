@@ -24,7 +24,7 @@ const steam_login_build = () => {
         'openid.mode': 'checkid_setup',
         'openid.ns': 'http://specs.openid.net/auth/2.0',
         'openid.realm': host,
-        'openid.return_to': `${host}${baseCache}../steam/verify?on_success=${encodeURIComponent(dir + ".set_token")}`
+        'openid.return_to': `${host}${baseCache[1]}/steam/verify?on_success=${encodeURIComponent(dir + ".set_token")}`
     });
     return `https://steamcommunity.com/openid/login?${steam_query}`
 }
