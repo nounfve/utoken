@@ -37,7 +37,8 @@ impl AuthToken {
         serde_json::to_string(self).unwrap()
     }
 
-    pub const ACCESS_EXPIRE: Duration = Duration::hours(4);
+    pub const ACCESS_EXPIRE: Duration = Duration::hours(6);
+    pub const AUTO_REFRESH: Duration = Duration::hours(1);
     pub const REFRESH_EXPIRE: Duration = Duration::days(30);
     pub const UTOKEN_ACCESS: &str = "uA";
     pub const UTOKEN_REFRESH: &str = "uR";

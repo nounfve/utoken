@@ -75,7 +75,7 @@ pub async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
     };
 
     if let Some(refresh) = &*refresh
-        && auth.access.expire - Utc::now() < AuthToken::ACCESS_EXPIRE / 1000 / 8
+        && auth.access.expire - Utc::now() < AuthToken::AUTO_REFRESH
     {
         return token_refresh(refresh.clone()).await;
     }
