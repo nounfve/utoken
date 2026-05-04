@@ -39,11 +39,15 @@ export class ObjectStore<T> extends ExternalStore<T, undefined> {
     }
 
     update(value: Partial<T>) {
-        this.mutate((current) => ({ ...current, ...value }))
+        this.replace({ ...this.value, ...value })
     }
 
-    mutate(func: (current: T) => T) {
-        this.value = func(this.value)
+    mutate(func: (current: T) => Partial<T>) {
+        this.update(func(this.value))
+    }
+
+    replace(value: T) {
+        this.value = value
         this.notify_all()
     }
 
@@ -73,13 +77,13 @@ export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
             const str = localStorage.getItem(this.storeKey)
             const obj = JSON.parse(str!)
             if (!obj) throw "empty obj";
-            super.mutate(() => obj)
+            super.replace(obj)
         } catch {
-            super.mutate(() => undefined)
+            super.replace(undefined)
         }
     }
 
-    override update(value: Partial<T> | undefined) {
+    override replace(value: T | undefined) {
         // update pass through localStorage event
         if (!value) {
             localStorage.removeItem(this.storeKey)

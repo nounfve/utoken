@@ -43,7 +43,7 @@ const infoToken = LastErrorCatcher(async () => {
     const token = await resp.json() as Partial<AuthToken>
 
     if (token?.access != undefined) {
-        UtokenStore.update(token)
+        UtokenStore.replace(token as AuthToken)
     }
     _State.update({ menuOpen: false })
 })
@@ -59,7 +59,7 @@ const clearUtoken = LastErrorCatcher(async () => {
     })
     if (!resp.ok) throw resp.status;
 
-    UtokenStore.update(undefined)
+    UtokenStore.replace(undefined)
     _State.update({ menuOpen: false })
 })
 

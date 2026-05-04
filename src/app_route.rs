@@ -62,32 +62,47 @@ async fn bind_link(
     RIP!(link.simple().to_string())
 }
 
-async fn resolve_link(Path(link): Path<String>) -> Response {
+async fn resolve_link(Path(link): Path<String>, RawQuery(rq): RawQuery) -> Response {
+    let (link, rest) = match link.split_once("/") {
+        Some(split) => split,
+        _ => (link.as_str(), ""),
+    };
     let Ok(link) = Uuid::from_str(&link) else {
         RIP!(StatusCode::BAD_REQUEST, "not valid link value")
     };
+
     let Ok(LinkBind {
-        path,
-        query,
+        mut path,
+        mut query,
         tokens: Some((access, refresh)),
     }) = LinkBind::sql_retrive_link(&link).await
     else {
         RIP!(StatusCode::UNAUTHORIZED, "non exists link")
     };
 
-    if !token_info(
+    let info_resp = token_info(
         OptionBearer(access.to_string().Some()),
         Q_refresh(refresh.to_string().Some()),
     )
-    .await
-    .status()
-    .is_success()
-    {
-        RIP!(StatusCode::UNAUTHORIZED, "token expired")
+    .await;
+    let info_header = match info_resp.status().is_success() {
+        false => RIP!(StatusCode::UNAUTHORIZED, "token expired"),
+        true => info_resp.headers().clone(),
     };
 
+    if !rest.is_empty() {
+        path = format!("{path}/{rest}")
+    }
+    if let Some(rq) = rq {
+        query = match query {
+            Some(val) => format!("{val}&{rq}"),
+            None => format!("?{rq}"),
+        }
+        .Some()
+    }
+
     let link = LinkBind { path, query, tokens: None };
-    RIP!(StatusCode::NO_CONTENT, link.set_headers(HeaderMap::new()))
+    RIP!(StatusCode::NO_CONTENT, link.set_headers(info_header))
 }
 
 use std::str::FromStr;
@@ -95,7 +110,7 @@ use std::str::FromStr;
 use axum::{
     Router,
     extract::{Path, RawQuery},
-    http::{self, HeaderMap},
+    http::{self},
     response::Response,
     routing::{any, get},
 };

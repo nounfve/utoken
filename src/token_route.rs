@@ -31,7 +31,11 @@ async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: String)
     info!("auth: {auth:?}");
 
     auth.claim = auth.claim.scope_only();
-    RIP!(StatusCode::CREATED, auth.to_json())
+    RIP!(
+        StatusCode::CREATED,
+        [(AuthToken::HEAD_X_SCOPE, auth.claim.parse_scope_name())],
+        auth.to_json()
+    )
 }
 
 async fn token_refresh(token: String) -> Response {
@@ -83,9 +87,12 @@ pub async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
     if auth.access.expire < Utc::now() {
         RIP!(StatusCode::UNAUTHORIZED, "expired token")
     }
-
-    let scop_only = json!({"claim":auth.claim.scope_only()}).to_string();
-    RIP!(StatusCode::OK, scop_only)
+    let scope_name = auth.claim.parse_scope_name();
+    RIP!(
+        StatusCode::OK,
+        [(AuthToken::HEAD_X_SCOPE, scope_name)],
+        json!({"claim":scope_name}).to_string()
+    )
 }
 
 async fn sub_token_create(bearer: OptionBearer, claim: String) -> Response {
