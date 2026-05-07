@@ -24,9 +24,9 @@ export class ExternalStore<T, K> extends Set<() => void> {
         }
     }
 
-    useAsExternalStore = () =>
+    useAsExternalStore = <R = T>(getter: (val: T) => R = () => this.snapshot as unknown as R) =>
         // eslint-disable-next-line react-hooks/rules-of-hooks
-        useSyncExternalStore(this.subscribe, () => this.snapshot)
+        useSyncExternalStore(this.subscribe, () => getter(this.snapshot))
 }
 
 export class ObjectStore<T> extends ExternalStore<T, undefined> {
@@ -52,7 +52,15 @@ export class ObjectStore<T> extends ExternalStore<T, undefined> {
     }
 
     useAsState = (): [T, (t: Partial<T>) => void] => [this.useAsExternalStore(), (val: Partial<T>) => this.update(val)]
+}
 
+export class ObjectStoreResetable<T> extends ObjectStore<T> {
+    initValue: T;
+    constructor(value: T) {
+        super(value)
+        this.initValue = value
+    }
+    reset() { this.replace(this.initValue) }
 }
 
 export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
@@ -93,5 +101,4 @@ export class ObjectInLocalStorage<T> extends ObjectStore<T | undefined> {
         }
         this.mockEvent()
     }
-
 }
