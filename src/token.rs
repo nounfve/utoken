@@ -12,14 +12,14 @@ use uuid::Uuid;
 
 use crate::database::DataBase;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuthToken {
     pub claim: Claim,
     pub access: Token,
     pub refresh: Token,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Token {
     pub content: Uuid,
     pub expire: DateTime<Utc>,

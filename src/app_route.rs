@@ -6,7 +6,7 @@ pub fn app_route() -> Router {
         .nest("/token", token_route())
         .nest("/@me", account_route())
         .route("/health", get(health!(^async)))
-        .fallback(health!(^async))
+        .fallback(not_found!(^async))
 }
 
 async fn handle_auth_path(
@@ -117,7 +117,7 @@ use axum::{
 use reqwest::StatusCode;
 use sutils::{
     IntoOption,
-    boilerplates::{RIP, health},
+    boilerplates::{RIP, health, not_found},
 };
 use tracing::{error, info};
 use uuid::Uuid;

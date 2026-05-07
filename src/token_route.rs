@@ -28,7 +28,6 @@ async fn token_create(ConnectInfo(addr): ConnectInfo<SocketAddr>, claim: String)
             RIP!(StatusCode::INTERNAL_SERVER_ERROR, "database raise error");
         }
     };
-    info!("auth: {auth:?}");
 
     auth.claim = auth.claim.scope_only();
     RIP!(

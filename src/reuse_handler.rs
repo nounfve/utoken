@@ -45,7 +45,7 @@ pub async fn create_sub_token(
             return (StatusCode::INTERNAL_SERVER_ERROR, "database raise error").Err();
         }
     };
-    info!("sub: {sub:?}");
+    
     sub.Ok()
 }
 
