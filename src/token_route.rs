@@ -55,7 +55,7 @@ async fn token_refresh(token: String) -> Response {
     RIP!(StatusCode::OK, auth.to_json())
 }
 
-async fn token_delete(bearer: OptionBearer) -> Result<impl IntoResponse, ErrorResponse> {
+async fn token_delete(bearer: OptionBearer) -> Result<Response, ErrorResponse> {
     let bearer = must_bearer(bearer).await?;
     match AuthToken::sql_delete_token(&bearer).await {
         Ok(_) => (),
@@ -63,13 +63,13 @@ async fn token_delete(bearer: OptionBearer) -> Result<impl IntoResponse, ErrorRe
             warn!("[maybe error delete failed] {err}");
         }
     };
-    (StatusCode::NO_CONTENT).Ok()
+    (StatusCode::NO_CONTENT).into_response().Ok()
 }
 
 pub async fn token_info(
     bearer: OptionBearer,
     refresh: Q_refresh,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<Response, ErrorResponse> {
     let bearer = must_bearer(bearer).await?;
 
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
@@ -100,10 +100,7 @@ pub async fn token_info(
         .Ok()
 }
 
-async fn sub_token_create(
-    bearer: OptionBearer,
-    claim: String,
-) -> Result<impl IntoResponse, ErrorResponse> {
+async fn sub_token_create(bearer: OptionBearer, claim: String) -> Result<Response, ErrorResponse> {
     let bearer = must_bearer(bearer).await?;
 
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
@@ -121,7 +118,7 @@ async fn sub_token_create(
     let mut sub = create_sub_token(&auth, &claim).await?;
 
     sub.claim = sub.claim.scope_only();
-    (StatusCode::CREATED, sub.to_json()).Ok()
+    (StatusCode::CREATED, sub.to_json()).into_response().Ok()
 }
 
 const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);

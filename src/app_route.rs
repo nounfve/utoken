@@ -14,7 +14,7 @@ async fn handle_auth_path(
     method: http::Method,
     Path(path): Path<String>,
     bearer: OptionBearer,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<Response, ErrorResponse> {
     info!("{method},{path},{bearer:?}");
     let bearer = must_bearer(bearer).await?;
 
@@ -33,7 +33,7 @@ async fn bind_link(
     Path(path): Path<String>,
     RawQuery(query): RawQuery,
     bearer: OptionBearer,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<Response, ErrorResponse> {
     info!("{path},{query:?},{bearer:?}");
     let bearer = must_bearer(bearer).await?;
 
@@ -53,13 +53,13 @@ async fn bind_link(
         }
     };
 
-    (link.simple().to_string()).Ok()
+    (link.simple().to_string()).into_response().Ok()
 }
 
 async fn resolve_link(
     Path(link): Path<String>,
     RawQuery(rq): RawQuery,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<Response, ErrorResponse> {
     let (link, rest) = match link.split_once("/") {
         Some(split) => split,
         _ => (link.as_str(), ""),
@@ -101,10 +101,12 @@ async fn resolve_link(
     }
 
     let link = LinkBind { path, query, tokens: None };
-    (StatusCode::NO_CONTENT, link.set_headers(info_header)).Ok()
+    (StatusCode::NO_CONTENT, link.set_headers(info_header))
+        .into_response()
+        .Ok()
 }
 
-async fn list_links(bearer: OptionBearer) -> Result<impl IntoResponse, ErrorResponse> {
+async fn list_links(bearer: OptionBearer) -> Result<Response, ErrorResponse> {
     let bearer = must_bearer(bearer).await?;
     let auth = verify_bearer_as_access(bearer).await?;
     let links = match LinkBind::sql_list_links(&auth.refresh.content).await {
@@ -114,7 +116,7 @@ async fn list_links(bearer: OptionBearer) -> Result<impl IntoResponse, ErrorResp
             return (StatusCode::INTERNAL_SERVER_ERROR, "").Err();
         }
     };
-    (axum::Json(links)).Ok()
+    (axum::Json(links)).into_response().Ok()
 }
 
 use std::str::FromStr;
@@ -122,11 +124,10 @@ use std::str::FromStr;
 use axum::{
     Router,
     extract::{Path, RawQuery},
-    http::{self},
-    response::IntoResponse,
+    http::{self, StatusCode},
+    response::{IntoResponse, Response},
     routing::{any, get},
 };
-use reqwest::StatusCode;
 use sutils::{
     IntoOption, IntoResult,
     boilerplates::{health, not_found},
