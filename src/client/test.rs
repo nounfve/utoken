@@ -55,6 +55,10 @@ async fn test_create_token() {
 
         let resp = client.auth_request(&req, &token).await;
         assert!(&resp.unwrap() == ".");
+
+        let links = client.list_links(&token).await.unwrap();
+        assert!(links.len() == 1);
+        assert!(links[0].1 == "/some-claim");
     }
 
     {
@@ -92,6 +96,5 @@ async fn test_create_token() {
 
         let resolved = client.resolve_link(Method::GET, &link).await;
         assert!(resolved.is_err())
-
     }
 }

@@ -55,80 +55,73 @@ async fn token_refresh(token: String) -> Response {
     RIP!(StatusCode::OK, auth.to_json())
 }
 
-async fn token_delete(bearer: OptionBearer) -> Response {
-    check_bearer_is_some!(bearer);
+async fn token_delete(bearer: OptionBearer) -> Result<impl IntoResponse, ErrorResponse> {
+    let bearer = must_bearer(bearer).await?;
     match AuthToken::sql_delete_token(&bearer).await {
         Ok(_) => (),
         Err(err) => {
             warn!("[maybe error delete failed] {err}");
         }
     };
-    RIP!(StatusCode::NO_CONTENT)
+    (StatusCode::NO_CONTENT).Ok()
 }
 
-pub async fn token_info(bearer: OptionBearer, refresh: Q_refresh) -> Response {
-    check_bearer_is_some!(bearer);
+pub async fn token_info(
+    bearer: OptionBearer,
+    refresh: Q_refresh,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let bearer = must_bearer(bearer).await?;
 
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
-            RIP!(StatusCode::UNAUTHORIZED, "invlid token");
+            return (StatusCode::UNAUTHORIZED, "invlid token").Err();
         }
     };
 
     if let Some(refresh) = &*refresh
         && auth.access.expire - Utc::now() < AuthToken::AUTO_REFRESH
     {
-        return token_refresh(refresh.clone()).await;
+        return token_refresh(refresh.clone()).await.Ok();
     }
 
     if auth.access.expire < Utc::now() {
-        RIP!(StatusCode::UNAUTHORIZED, "expired token")
+        return (StatusCode::UNAUTHORIZED, "expired token").Err();
     }
     let scope_name = auth.claim.parse_scope_name();
-    RIP!(
+
+    (
         StatusCode::OK,
         [(AuthToken::HEAD_X_SCOPE, scope_name)],
-        json!({"claim":scope_name}).to_string()
+        json!({"claim":scope_name}).to_string(),
     )
+        .into_response()
+        .Ok()
 }
 
-async fn sub_token_create(bearer: OptionBearer, claim: String) -> Response {
-    check_bearer_is_some!(bearer);
+async fn sub_token_create(
+    bearer: OptionBearer,
+    claim: String,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let bearer = must_bearer(bearer).await?;
 
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
         Ok(auth) => auth,
         Err(err) => {
             error!("{err}");
-            RIP!(StatusCode::UNAUTHORIZED, "invlid token");
+            return (StatusCode::UNAUTHORIZED, "invlid token").Err();
         }
     };
 
     if auth.access.expire < Utc::now() {
-        RIP!(StatusCode::UNAUTHORIZED, "expired token")
+        return (StatusCode::UNAUTHORIZED, "expired token").Err();
     }
 
-    let mut sub = match create_sub_token(&auth, &claim).await {
-        Ok(val) => val,
-        Err(err) => RIP!(err),
-    };
+    let mut sub = create_sub_token(&auth, &claim).await?;
 
     sub.claim = sub.claim.scope_only();
-    RIP!(StatusCode::CREATED, sub.to_json())
-}
-
-#[PutInMacro(inline_macro)]
-macro_rules! check_bearer_is_some {
-    ($B:ident) => {
-        let Some($B) = &*$B else {
-            RIP!(StatusCode::UNAUTHORIZED, "missing bearer header")
-        };
-
-        let Ok($B) = <uuid::Uuid as std::str::FromStr>::from_str($B) else {
-            RIP!(StatusCode::UNAUTHORIZED, "invalid uuid token")
-        };
-    };
+    (StatusCode::CREATED, sub.to_json()).Ok()
 }
 
 const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -141,18 +134,18 @@ use std::{
 use axum::{
     Router,
     extract::ConnectInfo,
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{delete, get, put},
 };
 use chrono::Utc;
 use reqwest::StatusCode;
 use serde_json::json;
-use sutils::{PutInMacro, boilerplates::RIP, inline_macro};
+use sutils::{IntoResult, boilerplates::RIP};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
     axum_extract::{OptionBearer, Q_refresh},
-    reuse_handler::create_sub_token,
+    reuse_handler::{ErrorResponse, create_sub_token, must_bearer},
     token::{AuthToken, Claim},
 };

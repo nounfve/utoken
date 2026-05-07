@@ -37,7 +37,29 @@ impl LinkBind {
             .await?;
         Self::from_row(&row)?.Ok()
     }
+
+    pub async fn sql_list_links(refresh: &Uuid) -> anyhow::Result<LinkPathVec> {
+        let sql = r#"
+            SELECT L.path,
+                L.link
+            FROM utokens T
+                JOIN link_bind L ON L.bind_to = T.refresh
+            WHERE T.child_of = $1
+            LIMIT 200;
+        "#;
+        let rows = sqlx::query(sql) // force break
+            .bind(&refresh)
+            .fetch_all(&DataBase::One().conn)
+            .await?;
+        let links = rows
+            .iter()
+            .map(|row| (row.get("link"), row.get("path")))
+            .collect::<LinkPathVec>();
+        links.Ok()
+    }
 }
+
+pub type LinkPathVec = Vec<(Uuid, String)>;
 
 impl LinkBind {
     pub fn set_headers(&self, mut headers: HeaderMap) -> HeaderMap {

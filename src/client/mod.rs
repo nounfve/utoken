@@ -5,7 +5,10 @@ use reqwest::{Method, Request, header::AUTHORIZATION};
 use sutils::{ContextFunction, IntoOption, IntoResult, Singleton};
 use tracing::info;
 
-use crate::{link_bind::LinkBind, token::AuthToken};
+use crate::{
+    link_bind::{LinkBind, LinkPathVec},
+    token::AuthToken,
+};
 
 #[Singleton]
 pub struct Client {
@@ -104,6 +107,19 @@ impl Client {
             .apply(|r| r.headers_mut().insert(AUTHORIZATION, access));
         let resp = self.inner.execute(link_req).await?.error_for_status()?;
         resp.text().await?.Ok()
+    }
+
+    pub async fn list_links(&self, token: &AuthToken) -> anyhow::Result<LinkPathVec> {
+        let url = format!("{}/link/.self/list", self.endpoint);
+
+        let resp = self
+            .inner
+            .get(&url)
+            .header(AUTHORIZATION, token.access.as_bearer())
+            .send()
+            .await?
+            .error_for_status()?;
+        resp.json::<LinkPathVec>().await?.Ok()
     }
 
     pub async fn resolve_link(&self, method: Method, link: &str) -> anyhow::Result<String> {

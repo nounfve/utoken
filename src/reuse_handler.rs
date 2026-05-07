@@ -1,10 +1,16 @@
-pub async fn handle_auth_path_reuse(
-    method: http::Method,
-    path: String,
-    bearer: Uuid,
-) -> Result<AuthToken, (StatusCode, &'static str)> {
-    info!("{method},{path},{bearer:?}");
+pub type ErrorResponse = (StatusCode, &'static str);
 
+pub async fn must_bearer(bearer: OptionBearer) -> Result<Uuid, ErrorResponse> {
+    let Some(bearer) = &*bearer else {
+        return (StatusCode::UNAUTHORIZED, "missing bearer header").Err();
+    };
+    let Ok(bearer) = <uuid::Uuid as std::str::FromStr>::from_str(bearer) else {
+        return (StatusCode::UNAUTHORIZED, "invalid uuid token").Err();
+    };
+    bearer.Ok()
+}
+
+pub async fn verify_bearer_as_access(bearer: Uuid) -> Result<AuthToken, ErrorResponse> {
     let auth = match AuthToken::sql_find_access_token(&bearer).await {
         Ok(auth) => auth,
         Err(err) => {
@@ -17,6 +23,16 @@ pub async fn handle_auth_path_reuse(
         warn!("token expired");
         return (StatusCode::UNAUTHORIZED, "token expired").Err();
     };
+    auth.Ok()
+}
+
+pub async fn handle_auth_path_reuse(
+    method: http::Method,
+    path: String,
+    bearer: Uuid,
+) -> Result<AuthToken, ErrorResponse> {
+    info!("{method},{path},{bearer:?}");
+    let auth = verify_bearer_as_access(bearer).await?;
 
     if !auth.claim.match_path(&format!("/{path}")) || !auth.claim.match_method(method.as_str()) {
         warn!("claim not matched {}", auth.claim.inner.to_string());
@@ -25,10 +41,7 @@ pub async fn handle_auth_path_reuse(
     auth.Ok()
 }
 
-pub async fn create_sub_token(
-    auth: &AuthToken,
-    claim: &str,
-) -> Result<AuthToken, (StatusCode, &'static str)> {
+pub async fn create_sub_token(auth: &AuthToken, claim: &str) -> Result<AuthToken, ErrorResponse> {
     info!("token_claim: {claim}");
     let claim = match auth.claim.sub_claim(&claim) {
         Ok(claim) => claim,
@@ -45,7 +58,7 @@ pub async fn create_sub_token(
             return (StatusCode::INTERNAL_SERVER_ERROR, "database raise error").Err();
         }
     };
-    
+
     sub.Ok()
 }
 
@@ -56,4 +69,4 @@ use sutils::{IntoOption, IntoResult};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::token::AuthToken;
+use crate::{axum_extract::OptionBearer, token::AuthToken};
