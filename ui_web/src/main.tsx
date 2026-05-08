@@ -17,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path='/account' element={<Account />} />
         <Route path='/login' element={<Login />} />
         <Route path='/.set_token' element={<SetToken />} />
-        <Route path='*' element={<Navigate to="/account" />} />
+        <Route path='*' element={<Navigate to={`/account${window.location.search}`} />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

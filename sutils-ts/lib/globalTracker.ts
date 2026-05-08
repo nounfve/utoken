@@ -14,7 +14,8 @@ document.addEventListener("mouseup", () => {
 export const windowState = {
     changeAt: performance.now(),
     isFocus: document.hasFocus(),
-    get focusTime() { return (this.isFocus ? 1 : -1) * (performance.now() - this.changeAt) }
+    get focusTime() { return (this.isFocus ? 1 : -1) * (performance.now() - this.changeAt) },
+    isTopWindow: window.top === window.self,
 }
 
 window.addEventListener("focus", () => {

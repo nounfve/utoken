@@ -4,30 +4,51 @@ import { Vbr } from "../sutils.ts/components/misc"
 import { baseCache, currentPage } from "../sutils.ts/current_page"
 import { ObjectStore } from "../sutils.ts/externalStore"
 import { LastErrorBoundary, LastErrorCatcher } from "../sutils.ts/components/lastError"
+import { useEffect, useRef } from "react"
+import { windowState } from "../sutils.ts/globalTracker"
+import { useSearchParams } from "react-router"
 
 export const Account = () => {
     const UT = UtokenStore.useAsExternalStore()
-    const [{ menuOpen }, Set] = _State.useAsState();
+    const { menuOpen } = _State.useAsExternalStore();
+    const [query] = useSearchParams()
+    const divRef = useRef<HTMLDivElement>(null)
+
+    const side = query.getAll("side").map(val => `side-${val}`).join(" ")
 
     const claimOrLogin = UT?.access ? (<button className="counter">{UT?.claim}</button>) : login
+    useEffect(() => {
+        if (windowState.isTopWindow) return;
+        document.documentElement.classList.add("iframe-doc")
+        divRef.current!.classList.add("iframe-page")
+        divRef.current!.parentElement?.removeAttribute("id")
+        divRef.current!.addEventListener("mouseenter", TriggerMenu);
+        divRef.current!.addEventListener("mouseleave", () => _State.update({ menuOpen: false }));
+    }, [])
 
     return (
-        <div className="account-page">
+        <div className={`account-page ${side}`} ref={divRef}>
             <LastErrorBoundary>
                 {claimOrLogin}
-                <Vbr />
                 <div className="account-menu" style={{ display: menuOpen ? "flex" : "none" }}>
+                    <Vbr />
                     <button className="counter" onClick={infoToken}>refresh</button>
                     <button className="counter" onClick={clearUtoken}>logout</button>
-                    <Vbr />
                 </div>
-                <button className="counter" disabled={!UT?.access} onClick={() => Set({ menuOpen: !menuOpen })}>{"↩"}</button>
+                {windowState.isTopWindow && <>
+                    <Vbr />
+                    <button className="counter" disabled={!UT?.access} onClick={TriggerMenu}>{"↩"}</button>
+                </>}
             </LastErrorBoundary>
         </div>
     )
 }
 
 const _State = new ObjectStore({ menuOpen: false })
+const TriggerMenu = () => {
+    const menuOpen = !_State.value.menuOpen && !!UtokenStore.value?.access
+    _State.update({ menuOpen })
+}
 
 const infoToken = LastErrorCatcher(async () => {
     const access = UtokenStore.value?.access.content;

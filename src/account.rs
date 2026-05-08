@@ -3,7 +3,16 @@ pub fn account_route() -> Router {
         .nest("/steam", steam_route())
         .route("/.ui./", get(bridge_dist_slash))
         .route("/.ui./{*path}", get(bridge_dist))
-        .fallback(async || Redirect::to("/@me/.ui./"))
+        .fallback(fallback)
+}
+
+async fn fallback(RawQuery(query): RawQuery) -> Redirect {
+    let ui = "/@me/.ui./";
+    let index = match query {
+        Some(val) => format!("{ui}?{val}").INTO::<Cow<_>>(),
+        None => ui.INTO::<Cow<_>>(),
+    };
+    Redirect::to(&index)
 }
 
 async fn bridge_dist_slash() -> Response {
@@ -44,7 +53,7 @@ use std::borrow::Cow;
 
 use axum::{
     Router,
-    extract::Path,
+    extract::{Path, RawQuery},
     response::{Redirect, Response},
     routing::get,
 };

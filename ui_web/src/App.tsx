@@ -29,7 +29,7 @@ function App() {
         >
           Count is {count}
         </button>
-        <iframe src={`${baseCache[0]}/account`} />
+        <iframe className='accountIframe' src={`${baseCache[0]}/account?side=right&side=top`} />
       </section>
 
       <div className="ticks"></div>

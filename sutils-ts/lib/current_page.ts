@@ -8,8 +8,9 @@ export const currentPage = (path: string = window.location.pathname) => {
 }
 
 export const lastbase = (base: string, path: string = window.location.pathname) => {
-    const baseRfind = path.lastIndexOf(base) + base.length;
-    const baseUrl = Number.isNaN(baseRfind) ? "/" : path.substring(0, baseRfind);
+    let baseRfind = path.lastIndexOf(base)
+    baseRfind = baseRfind < 0 ? baseRfind : baseRfind + base.length;
+    const baseUrl = baseRfind < 0 ? "/" : path.substring(0, baseRfind);
     cacheBaseParent(baseUrl)
     return baseCache[0]
 }
