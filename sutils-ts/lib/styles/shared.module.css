@@ -1,0 +1,5 @@
+.AnchorBR {
+    composes: anchor from "./shared.css";
+    right: 0px;
+    bottom: 0px;
+}
